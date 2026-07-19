@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "Arawa",
+    "slug": "arawa",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "arawa",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": { "supportsTablet": true, "bundleIdentifier": "com.arawa.mobile" },
+    "android": { "package": "com.arawa.mobile", "adaptiveIcon": { "backgroundColor": "#07090D" } },
+    "web": { "bundler": "metro", "output": "static" },
+    "plugins": [
+      "expo-router",
+      ["expo-camera", { "cameraPermission": "Allow Arawa to use your camera to create and share moments." }]
+    ],
+    "experiments": { "typedRoutes": true }
+  }
+}
+
