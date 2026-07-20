@@ -1,20 +1,29 @@
 {
   "expo": {
-    "name": "Arawa",
-    "slug": "arawa",
+    "name": "mobile",
+    "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "arawa",
-    "userInterfaceStyle": "dark",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "ios": { "supportsTablet": true, "bundleIdentifier": "com.arawa.mobile" },
-    "android": { "package": "com.arawa.mobile", "adaptiveIcon": { "backgroundColor": "#07090D" } },
-    "web": { "bundler": "metro", "output": "static" },
-    "plugins": [
-      "expo-router",
-      ["expo-camera", { "cameraPermission": "Allow Arawa to use your camera to create and share moments." }]
-    ],
-    "experiments": { "typedRoutes": true }
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
   }
 }
-
