@@ -12,3 +12,7 @@ Thumbs.db
 coverage/
 android/
 ios/
+
+# Local recovery/reference projects (preserved outside version control)
+mobile-old/
+mobile-sdk57/

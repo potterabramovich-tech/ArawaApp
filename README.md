@@ -50,15 +50,16 @@ ArawaApp/
 
 ## Prerequisites
 
-- Node.js 22.13 or newer
-- pnpm
+- Node.js 24.18.0 (Node 22.13 through 24 is supported)
+- Corepack with pnpm 11.19.0
 - Expo Go for device testing, or an Android/iOS development environment
 
 ## Installation
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ArawaApp.git
+git clone https://github.com/potterabramovich-tech/ArawaApp.git
 cd ArawaApp/mobile
+corepack enable
 pnpm install --frozen-lockfile
 ```
 
@@ -86,13 +87,27 @@ Quality checks:
 ```bash
 pnpm typecheck
 pnpm lint
+pnpm test
+pnpm check
 ```
 
 Generate a production JavaScript bundle:
 
 ```bash
 npx expo export --platform android
+npx expo export --platform web
 ```
+
+## Contribution workflow
+
+Keep `main` deployable. Create a short-lived branch from the latest `main`, run
+`pnpm check`, and open a pull request. Do not commit generated output, local
+environment files, or the preserved `mobile-old/` and `mobile-sdk57/` recovery
+directories.
+
+Suggested branch prefixes are `feature/`, `fix/`, and `chore/`.
+
+See [docs/WORKFLOW.md](docs/WORKFLOW.md) for the pull-request and branch-protection rollout.
 
 ## Future roadmap
 
@@ -111,4 +126,3 @@ Further architectural decisions are documented in [`docs/ARCHITECTURE.md`](docs/
 ## Project status
 
 The mobile foundation passes TypeScript, ESLint, Expo dependency compatibility checks, and an Android production export. Backend integrations are not yet configured.
-
