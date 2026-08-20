@@ -7,6 +7,7 @@ import { colors, radii, spacing } from '@/theme/tokens';
 interface CameraControlsProps {
   busy: boolean;
   cameraReady: boolean;
+  disabled?: boolean;
   facing: CameraType;
   flash: FlashMode;
   insets: EdgeInsets;
@@ -26,6 +27,7 @@ const flashIcons: Record<FlashMode, keyof typeof Ionicons.glyphMap> = {
 export function CameraControls({
   busy,
   cameraReady,
+  disabled: controlsDisabled = false,
   facing,
   flash,
   insets,
@@ -34,7 +36,7 @@ export function CameraControls({
   onCycleFlash,
   onSwitchCamera,
 }: CameraControlsProps) {
-  const disabled = busy || !cameraReady;
+  const shutterDisabled = controlsDisabled || busy || !cameraReady;
   const flashLabel = flash === 'off' ? 'Flash off' : `Flash ${flash}`;
 
   return (
@@ -53,14 +55,14 @@ export function CameraControls({
         <View style={styles.topActions}>
           <ControlButton
             accessibilityLabel={flashLabel}
-            disabled={busy}
+            disabled={controlsDisabled || busy}
             icon={flashIcons[flash]}
             onPress={onCycleFlash}
             selected={flash !== 'off'}
           />
           <ControlButton
             accessibilityLabel={`Switch to ${facing === 'back' ? 'front' : 'rear'} camera`}
-            disabled={busy}
+            disabled={controlsDisabled || busy}
             icon="camera-reverse-outline"
             onPress={onSwitchCamera}
           />
@@ -71,7 +73,7 @@ export function CameraControls({
         <View style={styles.sideControl}>
           <ControlButton
             accessibilityLabel="Choose photo from library"
-            disabled={busy}
+            disabled={controlsDisabled || busy}
             icon="images-outline"
             onPress={onChoosePhoto}
           />
@@ -81,13 +83,13 @@ export function CameraControls({
         <Pressable
           accessibilityLabel={busy ? 'Capturing photo' : 'Capture photo'}
           accessibilityRole="button"
-          accessibilityState={{ busy, disabled }}
-          disabled={disabled}
+          accessibilityState={{ busy, disabled: shutterDisabled }}
+          disabled={shutterDisabled}
           onPress={onCapture}
           style={({ pressed }) => [
             styles.shutterOuter,
-            pressed && !disabled && styles.pressed,
-            disabled && styles.disabled,
+            pressed && !shutterDisabled && styles.pressed,
+            shutterDisabled && styles.disabled,
           ]}
         >
           <View style={styles.shutter}>

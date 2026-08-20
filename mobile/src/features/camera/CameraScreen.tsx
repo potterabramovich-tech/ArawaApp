@@ -14,10 +14,18 @@ import { CameraControls } from './CameraControls';
 import { CameraFailureBanner } from './CameraFailureBanner';
 import { MediaPreview } from './MediaPreview';
 import {
+  createCameraPhoto,
+  getCameraShareMetadata,
+  getRetainedPreviewPhoto,
+  isShareCancellation,
+  retainPreviewPhoto,
+} from './cameraMedia';
+import {
   cameraSessionReducer,
   getVisibleCameraState,
   initialCameraSessionState,
   mapCameraSessionError,
+  openCameraSettingsSafely,
   type CameraPhoto,
 } from './cameraSession';
 
@@ -30,7 +38,16 @@ export function CameraScreen() {
   const [flash, setFlash] = useState<FlashMode>('off');
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraAttempt, setCameraAttempt] = useState(0);
-  const [session, dispatch] = useReducer(cameraSessionReducer, initialCameraSessionState);
+  const [session, dispatch] = useReducer(
+    cameraSessionReducer,
+    initialCameraSessionState,
+    () => {
+      const retainedPreview = getRetainedPreviewPhoto();
+      return retainedPreview
+        ? ({ status: 'preview-ready', photo: retainedPreview } as const)
+        : initialCameraSessionState;
+    },
+  );
   const camera = useRef<CameraView>(null);
   const operationLock = useRef(false);
   const insets = useSafeAreaInsets();
@@ -65,10 +82,10 @@ export function CameraScreen() {
   };
 
   const openSettings = async () => {
-    try {
-      await Linking.openSettings();
-    } catch (error) {
-      dispatch({ type: 'permission-failed', error: mapCameraSessionError(error, 'permission') });
+    const error = await openCameraSettingsSafely(Linking.openSettings);
+    if (error) {
+      dispatch({ type: 'permission-failed', error });
+      void hapticNotification(Haptics.NotificationFeedbackType.Error);
     }
   };
 
@@ -88,9 +105,15 @@ export function CameraScreen() {
         throw new Error('Camera is not ready');
       }
 
+      const capturedPhoto = createCameraPhoto({
+        uri: photo.uri,
+        source: 'camera',
+        saved: false,
+      });
+      retainPreviewPhoto(capturedPhoto);
       dispatch({
         type: 'capture-succeeded',
-        photo: { uri: photo.uri, source: 'camera', saved: false },
+        photo: capturedPhoto,
       });
       void hapticNotification(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
@@ -128,9 +151,17 @@ export function CameraScreen() {
         throw new Error('Image picker returned no photo');
       }
 
+      const selectedPhoto = createCameraPhoto({
+        fileName: photo.fileName,
+        mimeType: photo.mimeType,
+        uri: photo.uri,
+        source: 'library',
+        saved: true,
+      });
+      retainPreviewPhoto(selectedPhoto);
       dispatch({
         type: 'library-selected',
-        photo: { uri: photo.uri, source: 'library', saved: true },
+        photo: selectedPhoto,
       });
     } catch (error) {
       dispatch({ type: 'library-failed', error: mapCameraSessionError(error, 'library') });
@@ -146,6 +177,7 @@ export function CameraScreen() {
     }
 
     setCameraReady(false);
+    retainPreviewPhoto(null);
     dispatch({ type: 'preview-dismissed' });
     void hapticSelection();
   };
@@ -166,6 +198,7 @@ export function CameraScreen() {
       }
 
       await MediaLibrary.Asset.create(photo.uri);
+      retainPreviewPhoto({ ...photo, saved: true });
       dispatch({ type: 'save-succeeded' });
       void hapticNotification(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
@@ -193,12 +226,15 @@ export function CameraScreen() {
 
       await Sharing.shareAsync(photo.uri, {
         dialogTitle: 'Share your Arawa moment',
-        mimeType: 'image/jpeg',
-        UTI: 'public.jpeg',
+        ...getCameraShareMetadata(photo),
       });
       dispatch({ type: 'share-succeeded' });
-      void hapticNotification(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
+      if (isShareCancellation(error)) {
+        dispatch({ type: 'share-cancelled' });
+        return;
+      }
+
       dispatch({ type: 'share-failed', error: mapCameraSessionError(error, 'share') });
       void hapticNotification(Haptics.NotificationFeedbackType.Error);
     } finally {
@@ -207,7 +243,7 @@ export function CameraScreen() {
   };
 
   const switchCamera = () => {
-    if (operationLock.current) {
+    if (operationLock.current || session.status !== 'live') {
       return;
     }
 
@@ -218,7 +254,7 @@ export function CameraScreen() {
   };
 
   const cycleFlash = () => {
-    if (operationLock.current) {
+    if (operationLock.current || session.status !== 'live') {
       return;
     }
 
@@ -230,7 +266,7 @@ export function CameraScreen() {
 
   const recover = () => {
     operationLock.current = false;
-    if (session.status === 'failure' && session.error.code === 'camera-unavailable') {
+    if (session.status === 'failure' && session.recoveryAction === 'remount-camera') {
       setCameraReady(false);
       setCameraAttempt((value) => value + 1);
     }
@@ -239,17 +275,44 @@ export function CameraScreen() {
   };
 
   const recoverThroughSettings = async () => {
-    try {
-      await Linking.openSettings();
-    } finally {
+    const error = await openCameraSettingsSafely(Linking.openSettings);
+    if (error) {
+      dispatch({ type: 'recovery-failed', error });
+      void hapticNotification(Haptics.NotificationFeedbackType.Error);
+    } else {
       recover();
     }
   };
 
   const failureNeedsSettings =
-    session.status === 'failure' &&
-    (session.error.code === 'permission-denied' ||
-      session.error.code === 'library-permission-denied');
+    session.status === 'failure' && session.recoveryAction === 'open-settings';
+
+  const previewPhoto = getPreviewPhoto(visibleState);
+  if (previewPhoto) {
+    return (
+      <View style={styles.root}>
+        <MediaPreview
+          busyAction={
+            session.status === 'saving' ? 'saving' : session.status === 'sharing' ? 'sharing' : null
+          }
+          canSave={Platform.OS !== 'web'}
+          insets={insets}
+          onRetake={retake}
+          onSave={savePhoto}
+          onShare={sharePhoto}
+          photo={previewPhoto}
+        />
+        {session.status === 'failure' && (
+          <CameraFailureBanner
+            actionLabel={failureNeedsSettings ? 'Open Settings' : 'Try again'}
+            error={session.error}
+            insets={insets}
+            onRecover={failureNeedsSettings ? recoverThroughSettings : recover}
+          />
+        )}
+      </View>
+    );
+  }
 
   if (!permission) {
     return <Screen />;
@@ -291,34 +354,8 @@ export function CameraScreen() {
     );
   }
 
-  const previewPhoto = getPreviewPhoto(visibleState);
-  if (previewPhoto) {
-    return (
-      <View style={styles.root}>
-        <MediaPreview
-          busyAction={
-            session.status === 'saving' ? 'saving' : session.status === 'sharing' ? 'sharing' : null
-          }
-          canSave={Platform.OS !== 'web'}
-          insets={insets}
-          onRetake={retake}
-          onSave={savePhoto}
-          onShare={sharePhoto}
-          photo={previewPhoto}
-        />
-        {session.status === 'failure' && (
-          <CameraFailureBanner
-            actionLabel={failureNeedsSettings ? 'Open Settings' : 'Try again'}
-            error={session.error}
-            insets={insets}
-            onRecover={failureNeedsSettings ? recoverThroughSettings : recover}
-          />
-        )}
-      </View>
-    );
-  }
-
   const cameraBusy = session.status === 'capturing' || session.status === 'selecting-library';
+  const controlsDisabled = session.status === 'failure';
 
   return (
     <View style={styles.root}>
@@ -336,6 +373,7 @@ export function CameraScreen() {
       <CameraControls
         busy={cameraBusy}
         cameraReady={cameraReady}
+        disabled={controlsDisabled}
         facing={facing}
         flash={flash}
         insets={insets}

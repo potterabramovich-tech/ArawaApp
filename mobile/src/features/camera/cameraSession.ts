@@ -1,6 +1,8 @@
 export type CameraMediaSource = 'camera' | 'library';
 
 export interface CameraPhoto {
+  fileName: string;
+  mimeType: string;
   uri: string;
   source: CameraMediaSource;
   saved: boolean;
@@ -15,9 +17,11 @@ export type CameraFailureCode =
   | 'save-failed'
   | 'sharing-unavailable'
   | 'share-failed'
+  | 'settings-unavailable'
   | 'unknown';
 
-export type CameraOperation = 'permission' | 'capture' | 'library' | 'save' | 'share';
+export type CameraOperation = 'permission' | 'capture' | 'library' | 'save' | 'share' | 'settings';
+export type CameraRecoveryAction = 'resume' | 'remount-camera' | 'open-settings';
 
 export interface CameraFailure {
   code: CameraFailureCode;
@@ -38,7 +42,12 @@ export type CameraSessionState =
   | { status: 'selecting-library' }
   | { status: 'saving'; photo: CameraPhoto }
   | { status: 'sharing'; photo: CameraPhoto }
-  | { status: 'failure'; error: CameraFailure; recoverTo: RecoverableCameraState };
+  | {
+      status: 'failure';
+      error: CameraFailure;
+      recoverTo: RecoverableCameraState;
+      recoveryAction: CameraRecoveryAction;
+    };
 
 export type CameraSessionEvent =
   | { type: 'permission-resolved'; granted: boolean; canAskAgain: boolean }
@@ -57,7 +66,9 @@ export type CameraSessionEvent =
   | { type: 'save-failed'; error: CameraFailure }
   | { type: 'share-started' }
   | { type: 'share-succeeded' }
+  | { type: 'share-cancelled' }
   | { type: 'share-failed'; error: CameraFailure }
+  | { type: 'recovery-failed'; error: CameraFailure }
   | { type: 'failure-recovered' };
 
 export const initialCameraSessionState: CameraSessionState = {
@@ -71,6 +82,10 @@ export function cameraSessionReducer(
   switch (event.type) {
     case 'permission-resolved':
       if (!event.granted) {
+        if (getVisibleCameraState(state)?.status === 'preview-ready') {
+          return state;
+        }
+
         return { status: 'permission-required', canAskAgain: event.canAskAgain };
       }
 
@@ -79,7 +94,13 @@ export function cameraSessionReducer(
         : state;
     case 'permission-failed':
       return state.status === 'permission-required'
-        ? { status: 'failure', error: event.error, recoverTo: state }
+        ? {
+            status: 'failure',
+            error: event.error,
+            recoverTo: state,
+            recoveryAction:
+              event.error.code === 'settings-unavailable' ? 'open-settings' : 'resume',
+          }
         : state;
     case 'capture-started':
       return state.status === 'live' ? { status: 'capturing' } : state;
@@ -89,11 +110,21 @@ export function cameraSessionReducer(
         : state;
     case 'capture-failed':
       return state.status === 'capturing'
-        ? { status: 'failure', error: event.error, recoverTo: { status: 'live' } }
+        ? {
+            status: 'failure',
+            error: event.error,
+            recoverTo: { status: 'live' },
+            recoveryAction: 'resume',
+          }
         : state;
     case 'camera-failed':
       return state.status === 'live' || state.status === 'capturing'
-        ? { status: 'failure', error: event.error, recoverTo: { status: 'live' } }
+        ? {
+            status: 'failure',
+            error: event.error,
+            recoverTo: { status: 'live' },
+            recoveryAction: 'remount-camera',
+          }
         : state;
     case 'library-started':
       return state.status === 'live' ? { status: 'selecting-library' } : state;
@@ -105,7 +136,12 @@ export function cameraSessionReducer(
         : state;
     case 'library-failed':
       return state.status === 'selecting-library'
-        ? { status: 'failure', error: event.error, recoverTo: { status: 'live' } }
+        ? {
+            status: 'failure',
+            error: event.error,
+            recoverTo: { status: 'live' },
+            recoveryAction: 'resume',
+          }
         : state;
     case 'preview-dismissed':
       return state.status === 'preview-ready' ? { status: 'live' } : state;
@@ -123,11 +159,14 @@ export function cameraSessionReducer(
             status: 'failure',
             error: event.error,
             recoverTo: { status: 'preview-ready', photo: state.photo },
+            recoveryAction:
+              event.error.code === 'library-permission-denied' ? 'open-settings' : 'resume',
           }
         : state;
     case 'share-started':
       return state.status === 'preview-ready' ? { status: 'sharing', photo: state.photo } : state;
     case 'share-succeeded':
+    case 'share-cancelled':
       return state.status === 'sharing'
         ? { status: 'preview-ready', photo: state.photo }
         : state;
@@ -137,7 +176,12 @@ export function cameraSessionReducer(
             status: 'failure',
             error: event.error,
             recoverTo: { status: 'preview-ready', photo: state.photo },
+            recoveryAction: 'resume',
           }
+        : state;
+    case 'recovery-failed':
+      return state.status === 'failure'
+        ? { ...state, error: event.error, recoveryAction: 'open-settings' }
         : state;
     case 'failure-recovered':
       return state.status === 'failure' ? state.recoverTo : state;
@@ -185,6 +229,11 @@ const failures: Record<CameraFailureCode, Omit<CameraFailure, 'code'>> = {
     message: 'This moment could not be shared. Please try again.',
     recoverable: true,
   },
+  'settings-unavailable': {
+    title: 'Could not open Settings',
+    message: 'Arawa could not open device Settings. Please try again or open Settings manually.',
+    recoverable: true,
+  },
   unknown: {
     title: 'Something went wrong',
     message: 'AraCam ran into an unexpected problem. Please try again.',
@@ -196,6 +245,17 @@ export function createCameraFailure(code: CameraFailureCode): CameraFailure {
   return { code, ...failures[code] };
 }
 
+export async function openCameraSettingsSafely(
+  openSettings: () => Promise<unknown>,
+): Promise<CameraFailure | null> {
+  try {
+    await openSettings();
+    return null;
+  } catch (error) {
+    return mapCameraSessionError(error, 'settings');
+  }
+}
+
 export function mapCameraSessionError(
   error: unknown,
   operation: CameraOperation = 'capture',
@@ -203,6 +263,10 @@ export function mapCameraSessionError(
   const code = readErrorValue(error, 'code').toLowerCase();
   const message = readErrorValue(error, 'message').toLowerCase();
   const searchable = `${code} ${message}`;
+
+  if (operation === 'settings') {
+    return createCameraFailure('settings-unavailable');
+  }
 
   if (searchable.includes('permission')) {
     return createCameraFailure(operation === 'save' ? 'library-permission-denied' : 'permission-denied');

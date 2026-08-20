@@ -1,4 +1,12 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import {
+  AccessibilityInfo,
+  findNodeHandle,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { EdgeInsets } from 'react-native-safe-area-context';
 import { colors, radii, spacing } from '@/theme/tokens';
@@ -11,15 +19,39 @@ interface CameraFailureBannerProps {
   onRecover: () => void;
 }
 
+export function getCameraFailureAccessibilityProps(error: CameraFailure) {
+  return {
+    accessibilityLabel: `${error.title}. ${error.message}`,
+    accessibilityLiveRegion: 'assertive' as const,
+    accessibilityRole: 'alert' as const,
+    accessibilityViewIsModal: true,
+    accessible: true,
+  };
+}
+
 export function CameraFailureBanner({
   actionLabel = 'Try again',
   error,
   insets,
   onRecover,
 }: CameraFailureBannerProps) {
+  const card = useRef<View>(null);
+
+  useEffect(() => {
+    const node = findNodeHandle(card.current);
+    if (node) {
+      AccessibilityInfo.setAccessibilityFocus(node);
+    }
+  }, [error.code]);
+
   return (
-    <View pointerEvents="box-none" style={[styles.overlay, { paddingTop: insets.top + spacing.sm }]}>
-      <View accessibilityLiveRegion="assertive" style={styles.card}>
+    <View style={[styles.overlay, { paddingTop: insets.top + spacing.sm }]}>
+      <View
+        {...getCameraFailureAccessibilityProps(error)}
+        onAccessibilityEscape={onRecover}
+        ref={card}
+        style={styles.card}
+      >
         <View style={styles.icon}>
           <Ionicons name="alert-circle-outline" size={24} color={colors.coral} />
         </View>
