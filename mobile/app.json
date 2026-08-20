@@ -12,7 +12,23 @@
     "web": { "bundler": "metro", "output": "static" },
     "plugins": [
       "expo-router",
-      ["expo-camera", { "cameraPermission": "Allow Arawa to use your camera to create and share moments." }]
+      ["expo-camera", { "cameraPermission": "Allow Arawa to use your camera to create and share moments." }],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Arawa to select a photo for your local moment.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Arawa to access photos you choose.",
+          "savePhotosPermission": "Allow Arawa to save captured moments to your photo library.",
+          "granularPermissions": ["photo"],
+          "preventAutomaticLimitedAccessAlert": true
+        }
+      ]
     ],
     "experiments": { "typedRoutes": true }
   }

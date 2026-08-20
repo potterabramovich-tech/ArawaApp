@@ -22,6 +22,8 @@ minimumReleaseAgeExclude:
   - expo-modules-jsi@57.0.5
   - expo-router@57.0.15
   - expo@57.0.15
+  - expo-image-picker@57.0.12
+  - expo-sharing@57.0.14
 
 nodeLinker: hoisted
 

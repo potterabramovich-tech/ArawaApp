@@ -1,65 +1,85 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { CameraView, useCameraPermissions, type CameraType } from 'expo-camera';
+import { AppState, Linking, Platform, StyleSheet, Text, View } from 'react-native';
+import { CameraView, useCameraPermissions, type CameraType, type FlashMode } from 'expo-camera';
+import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
+import * as MediaLibrary from 'expo-media-library';
+import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '@/components/Screen';
 import { GlowButton } from '@/components/GlowButton';
 import { colors, radii, spacing } from '@/theme/tokens';
+import { CameraControls } from './CameraControls';
+import { CameraFailureBanner } from './CameraFailureBanner';
+import { MediaPreview } from './MediaPreview';
 import {
   cameraSessionReducer,
+  getVisibleCameraState,
   initialCameraSessionState,
   mapCameraSessionError,
+  type CameraPhoto,
 } from './cameraSession';
 
+const backFlashModes: FlashMode[] = ['off', 'auto', 'on'];
+const frontFlashModes: FlashMode[] = ['off', 'screen'];
+
 export function CameraScreen() {
-  const [permission, requestPermission] = useCameraPermissions();
+  const [permission, requestPermission, getPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
+  const [flash, setFlash] = useState<FlashMode>('off');
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraAttempt, setCameraAttempt] = useState(0);
   const [session, dispatch] = useReducer(cameraSessionReducer, initialCameraSessionState);
   const camera = useRef<CameraView>(null);
-  const captureLock = useRef(false);
+  const operationLock = useRef(false);
+  const insets = useSafeAreaInsets();
+  const visibleState = getVisibleCameraState(session);
 
   useEffect(() => {
     if (permission) {
-      dispatch({ type: 'permission-resolved', granted: permission.granted });
+      dispatch({
+        type: 'permission-resolved',
+        granted: permission.granted,
+        canAskAgain: permission.canAskAgain,
+      });
     }
   }, [permission]);
 
-  if (!permission) {
-    return <Screen />;
-  }
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        void getPermission();
+      }
+    });
 
-  if (!permission.granted) {
-    return (
-      <Screen style={styles.permission}>
-        <View style={styles.permissionIcon}>
-          <Ionicons name="camera-outline" size={32} color={colors.cyan} />
-        </View>
-        <Text style={styles.permissionTitle}>Camera access</Text>
-        <Text style={styles.permissionBody}>
-          Arawa needs permission only when you choose to capture a moment.
-        </Text>
-        <GlowButton label="Allow camera" onPress={requestPermission} />
-      </Screen>
-    );
-  }
+    return () => subscription.remove();
+  }, [getPermission]);
 
-  const releasePreview = () => {
-    captureLock.current = false;
-    dispatch({ type: 'preview-dismissed' });
+  const requestCameraAccess = async () => {
+    try {
+      await requestPermission();
+    } catch (error) {
+      dispatch({ type: 'permission-failed', error: mapCameraSessionError(error, 'permission') });
+    }
   };
 
-  const recoverFromFailure = () => {
-    captureLock.current = false;
-    dispatch({ type: 'failure-recovered' });
+  const openSettings = async () => {
+    try {
+      await Linking.openSettings();
+    } catch (error) {
+      dispatch({ type: 'permission-failed', error: mapCameraSessionError(error, 'permission') });
+    }
   };
 
   const capture = async () => {
-    if (captureLock.current || session.status !== 'live') {
+    if (operationLock.current || session.status !== 'live' || !cameraReady) {
       return;
     }
 
-    captureLock.current = true;
+    operationLock.current = true;
     dispatch({ type: 'capture-started' });
+    void hapticImpact(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
       const photo = await camera.current?.takePictureAsync({ quality: 0.85 });
@@ -68,79 +88,294 @@ export function CameraScreen() {
         throw new Error('Camera is not ready');
       }
 
-      dispatch({ type: 'capture-succeeded', photo: { uri: photo.uri } });
-      Alert.alert('Moment captured', 'Editing and publishing arrive with the media backend.');
-      releasePreview();
+      dispatch({
+        type: 'capture-succeeded',
+        photo: { uri: photo.uri, source: 'camera', saved: false },
+      });
+      void hapticNotification(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
-      const cameraError = mapCameraSessionError(error);
-      dispatch({ type: 'capture-failed', error: cameraError });
-      Alert.alert(cameraError.title, cameraError.message);
-      recoverFromFailure();
+      dispatch({ type: 'capture-failed', error: mapCameraSessionError(error, 'capture') });
+      void hapticNotification(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      operationLock.current = false;
     }
   };
 
+  const choosePhoto = async () => {
+    if (operationLock.current || session.status !== 'live') {
+      return;
+    }
+
+    operationLock.current = true;
+    dispatch({ type: 'library-started' });
+    void hapticSelection();
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        allowsMultipleSelection: false,
+        quality: 0.9,
+      });
+
+      if (result.canceled) {
+        dispatch({ type: 'library-cancelled' });
+        return;
+      }
+
+      const photo = result.assets[0];
+      if (!photo) {
+        throw new Error('Image picker returned no photo');
+      }
+
+      dispatch({
+        type: 'library-selected',
+        photo: { uri: photo.uri, source: 'library', saved: true },
+      });
+    } catch (error) {
+      dispatch({ type: 'library-failed', error: mapCameraSessionError(error, 'library') });
+      void hapticNotification(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      operationLock.current = false;
+    }
+  };
+
+  const retake = () => {
+    if (session.status !== 'preview-ready') {
+      return;
+    }
+
+    setCameraReady(false);
+    dispatch({ type: 'preview-dismissed' });
+    void hapticSelection();
+  };
+
+  const savePhoto = async () => {
+    if (operationLock.current || session.status !== 'preview-ready' || session.photo.saved) {
+      return;
+    }
+
+    operationLock.current = true;
+    const photo = session.photo;
+    dispatch({ type: 'save-started' });
+
+    try {
+      const mediaPermission = await MediaLibrary.requestPermissionsAsync(true, ['photo']);
+      if (!mediaPermission.granted) {
+        throw { code: 'E_MEDIA_LIBRARY_PERMISSION' };
+      }
+
+      await MediaLibrary.Asset.create(photo.uri);
+      dispatch({ type: 'save-succeeded' });
+      void hapticNotification(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      dispatch({ type: 'save-failed', error: mapCameraSessionError(error, 'save') });
+      void hapticNotification(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      operationLock.current = false;
+    }
+  };
+
+  const sharePhoto = async () => {
+    if (operationLock.current || session.status !== 'preview-ready') {
+      return;
+    }
+
+    operationLock.current = true;
+    const photo = session.photo;
+    dispatch({ type: 'share-started' });
+
+    try {
+      const sharingAvailable = await Sharing.isAvailableAsync();
+      if (!sharingAvailable) {
+        throw new Error('Sharing unavailable');
+      }
+
+      await Sharing.shareAsync(photo.uri, {
+        dialogTitle: 'Share your Arawa moment',
+        mimeType: 'image/jpeg',
+        UTI: 'public.jpeg',
+      });
+      dispatch({ type: 'share-succeeded' });
+      void hapticNotification(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      dispatch({ type: 'share-failed', error: mapCameraSessionError(error, 'share') });
+      void hapticNotification(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      operationLock.current = false;
+    }
+  };
+
+  const switchCamera = () => {
+    if (operationLock.current) {
+      return;
+    }
+
+    setCameraReady(false);
+    setFlash('off');
+    setFacing((value) => (value === 'back' ? 'front' : 'back'));
+    void hapticSelection();
+  };
+
+  const cycleFlash = () => {
+    if (operationLock.current) {
+      return;
+    }
+
+    const modes = facing === 'back' ? backFlashModes : frontFlashModes;
+    const currentIndex = modes.indexOf(flash);
+    setFlash(modes[(currentIndex + 1) % modes.length] ?? 'off');
+    void hapticSelection();
+  };
+
+  const recover = () => {
+    operationLock.current = false;
+    if (session.status === 'failure' && session.error.code === 'camera-unavailable') {
+      setCameraReady(false);
+      setCameraAttempt((value) => value + 1);
+    }
+    dispatch({ type: 'failure-recovered' });
+    void hapticSelection();
+  };
+
+  const recoverThroughSettings = async () => {
+    try {
+      await Linking.openSettings();
+    } finally {
+      recover();
+    }
+  };
+
+  const failureNeedsSettings =
+    session.status === 'failure' &&
+    (session.error.code === 'permission-denied' ||
+      session.error.code === 'library-permission-denied');
+
+  if (!permission) {
+    return <Screen />;
+  }
+
+  if (!permission.granted) {
+    const canAskAgain =
+      visibleState?.status === 'permission-required'
+        ? visibleState.canAskAgain
+        : permission.canAskAgain;
+
+    return (
+      <View style={styles.root}>
+        <Screen style={styles.permission}>
+          <View style={styles.permissionIcon}>
+            <Ionicons name="camera-outline" size={32} color={colors.cyan} />
+          </View>
+          <Text style={styles.permissionTitle}>Camera access</Text>
+          <Text style={styles.permissionBody}>
+            {canAskAgain
+              ? 'Arawa needs permission only when you choose to capture a moment.'
+              : 'Camera access is disabled. Open Settings to allow AraCam to capture moments.'}
+          </Text>
+          <GlowButton
+            accessibilityLabel={canAskAgain ? 'Allow camera access' : 'Open camera settings'}
+            label={canAskAgain ? 'Allow camera' : 'Open Settings'}
+            onPress={canAskAgain ? requestCameraAccess : openSettings}
+          />
+        </Screen>
+        {session.status === 'failure' && (
+          <CameraFailureBanner
+            actionLabel={failureNeedsSettings ? 'Open Settings' : 'Try again'}
+            error={session.error}
+            insets={insets}
+            onRecover={failureNeedsSettings ? recoverThroughSettings : recover}
+          />
+        )}
+      </View>
+    );
+  }
+
+  const previewPhoto = getPreviewPhoto(visibleState);
+  if (previewPhoto) {
+    return (
+      <View style={styles.root}>
+        <MediaPreview
+          busyAction={
+            session.status === 'saving' ? 'saving' : session.status === 'sharing' ? 'sharing' : null
+          }
+          canSave={Platform.OS !== 'web'}
+          insets={insets}
+          onRetake={retake}
+          onSave={savePhoto}
+          onShare={sharePhoto}
+          photo={previewPhoto}
+        />
+        {session.status === 'failure' && (
+          <CameraFailureBanner
+            actionLabel={failureNeedsSettings ? 'Open Settings' : 'Try again'}
+            error={session.error}
+            insets={insets}
+            onRecover={failureNeedsSettings ? recoverThroughSettings : recover}
+          />
+        )}
+      </View>
+    );
+  }
+
+  const cameraBusy = session.status === 'capturing' || session.status === 'selecting-library';
+
   return (
     <View style={styles.root}>
-      <CameraView ref={camera} style={StyleSheet.absoluteFill} facing={facing} />
-      <View style={styles.overlay}>
-        <View style={styles.top}>
-          <Text style={styles.mode}>MOMENT</Text>
-          <Pressable
-            style={styles.round}
-            onPress={() => setFacing((value) => (value === 'back' ? 'front' : 'back'))}
-          >
-            <Ionicons name="camera-reverse-outline" size={24} color="#fff" />
-          </Pressable>
-        </View>
-        <View style={styles.bottom}>
-          <Text style={styles.hint}>Tap to capture</Text>
-          <Pressable
-            accessibilityLabel="Capture photo"
-            onPress={capture}
-            style={styles.shutterOuter}
-          >
-            <View style={styles.shutter} />
-          </Pressable>
-          <View style={styles.round}>
-            <Ionicons name="images-outline" size={22} color="#fff" />
-          </View>
-        </View>
-      </View>
+      <CameraView
+        flash={flash}
+        facing={facing}
+        key={`${facing}-${cameraAttempt}`}
+        onCameraReady={() => setCameraReady(true)}
+        onMountError={(error) =>
+          dispatch({ type: 'camera-failed', error: mapCameraSessionError(error, 'capture') })
+        }
+        ref={camera}
+        style={StyleSheet.absoluteFill}
+      />
+      <CameraControls
+        busy={cameraBusy}
+        cameraReady={cameraReady}
+        facing={facing}
+        flash={flash}
+        insets={insets}
+        onCapture={capture}
+        onChoosePhoto={choosePhoto}
+        onCycleFlash={cycleFlash}
+        onSwitchCamera={switchCamera}
+      />
+      {session.status === 'failure' && (
+        <CameraFailureBanner
+          actionLabel={failureNeedsSettings ? 'Open Settings' : 'Try again'}
+          error={session.error}
+          insets={insets}
+          onRecover={failureNeedsSettings ? recoverThroughSettings : recover}
+        />
+      )}
     </View>
   );
 }
 
+function getPreviewPhoto(
+  state: ReturnType<typeof getVisibleCameraState>,
+): CameraPhoto | null {
+  return state?.status === 'preview-ready' ? state.photo : null;
+}
+
+async function hapticSelection() {
+  await Haptics.selectionAsync().catch(() => undefined);
+}
+
+async function hapticImpact(style: Haptics.ImpactFeedbackStyle) {
+  await Haptics.impactAsync(style).catch(() => undefined);
+}
+
+async function hapticNotification(type: Haptics.NotificationFeedbackType) {
+  await Haptics.notificationAsync(type).catch(() => undefined);
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.ink },
-  overlay: {
-    flex: 1,
-    justifyContent: 'space-between',
-    paddingTop: 64,
-    paddingBottom: 112,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: 'rgba(0,0,0,.12)',
-  },
-  top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  mode: { color: '#fff', fontWeight: '800', letterSpacing: 2 },
-  round: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: 'rgba(0,0,0,.38)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  hint: { color: '#fff', width: 70, fontSize: 12 },
-  shutterOuter: {
-    width: 78,
-    height: 78,
-    borderRadius: 39,
-    borderWidth: 3,
-    borderColor: '#fff',
-    padding: 5,
-  },
-  shutter: { flex: 1, borderRadius: 34, backgroundColor: '#fff' },
   permission: { justifyContent: 'center', gap: spacing.md },
   permissionIcon: {
     width: 64,
