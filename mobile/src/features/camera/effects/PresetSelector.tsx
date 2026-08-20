@@ -12,24 +12,25 @@ import type {
 interface PresetSelectorProps {
   capabilities: ImageEffectCapabilities;
   disabled: boolean;
-  onIntensityChange: (intensity: number) => void;
+  onIntensityAdjust: (delta: number) => void;
   onPresetSelect: (presetId: ImageEffectPresetId) => void;
   onReset: () => void;
   selection: ImageEffectSelectionState;
 }
 
 const INTENSITY_STEP = 10;
+export const MINIMUM_TOUCH_TARGET_SIZE = 44;
 
 export function PresetSelector({
   capabilities,
   disabled,
-  onIntensityChange,
+  onIntensityAdjust,
   onPresetSelect,
   onReset,
   selection,
 }: PresetSelectorProps) {
   const originalSelected = selection.selectedPresetId === 'original';
-  const changeIntensity = (amount: number) => onIntensityChange(selection.intensity + amount);
+  const changeIntensity = (amount: number) => onIntensityAdjust(amount);
 
   return (
     <View accessibilityLabel="AraCam signature presets" style={styles.root}>
@@ -163,7 +164,13 @@ const styles = StyleSheet.create({
   headingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   eyebrow: { color: colors.text, fontSize: 11, fontWeight: '900', letterSpacing: 1.3 },
   disclosure: { color: colors.textMuted, fontSize: 10, marginTop: 2 },
-  reset: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 36, paddingHorizontal: spacing.sm },
+  reset: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: MINIMUM_TOUCH_TARGET_SIZE,
+    paddingHorizontal: spacing.sm,
+  },
   resetText: { color: colors.cyan, fontSize: 11, fontWeight: '800' },
   presetList: { gap: spacing.sm, paddingRight: spacing.md },
   preset: {
@@ -180,11 +187,16 @@ const styles = StyleSheet.create({
   swatch: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   presetName: { color: colors.textMuted, fontSize: 10, fontWeight: '700', maxWidth: 66 },
   selectedText: { color: colors.text },
-  intensityRow: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  intensityRow: {
+    minHeight: MINIMUM_TOUCH_TARGET_SIZE,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
   intensityButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: MINIMUM_TOUCH_TARGET_SIZE,
+    height: MINIMUM_TOUCH_TARGET_SIZE,
+    borderRadius: MINIMUM_TOUCH_TARGET_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceRaised,

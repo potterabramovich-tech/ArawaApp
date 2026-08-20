@@ -9,6 +9,7 @@ const previewCapabilities: ImageEffectCapabilities = {
   platform: 'ios',
   previewOverlay: true,
   nativePixelProcessing: false,
+  gpuProcessing: false,
   realtimeCameraProcessing: false,
   localSceneAnalysis: false,
   provenanceMetadata: false,
@@ -66,7 +67,7 @@ describe('effect capability degradation', () => {
       defaultIntensity: 50,
       processing: {
         pipeline: 'native-pixel-pipeline',
-        realtime: false,
+        executionMode: 'none',
         memoryClass: 'moderate',
         requirements: ['native-pixel-processing'],
       },
@@ -77,6 +78,86 @@ describe('effect capability degradation', () => {
       available: false,
       mode: 'unavailable',
       reason: 'Requires native pixel processing.',
+    });
+  });
+
+  it.each([
+    [
+      'gpu-processing',
+      { nativePixelProcessing: true, gpuProcessing: false, realtimeCameraProcessing: true },
+      'Requires gpu processing.',
+    ],
+    [
+      'native-pixel-processing',
+      { nativePixelProcessing: false, gpuProcessing: true, realtimeCameraProcessing: true },
+      'Requires native pixel processing.',
+    ],
+    [
+      'realtime-camera-processing',
+      { nativePixelProcessing: true, gpuProcessing: true, realtimeCameraProcessing: false },
+      'Requires realtime camera processing.',
+    ],
+    [
+      'local-scene-analysis',
+      { nativePixelProcessing: true, gpuProcessing: true, realtimeCameraProcessing: true },
+      'Requires local scene analysis.',
+    ],
+  ] as const)(
+    'gates %s independently from other processing capabilities',
+    (requirement, capabilityOverrides, expectedReason) => {
+      const preset: ImageEffectPreset = {
+        id: 'nightglass',
+        displayName: 'Future capability look',
+        category: 'enhancement',
+        defaultIntensity: 50,
+        processing: {
+          pipeline: 'native-pixel-pipeline',
+          executionMode: 'realtime-camera',
+          memoryClass: 'moderate',
+          requirements: [requirement],
+        },
+        previewTreatment: null,
+      };
+
+      expect(
+        getImageEffectAvailability(preset, {
+          ...previewCapabilities,
+          ...capabilityOverrides,
+          localSceneAnalysis: false,
+        }),
+      ).toEqual({ available: false, mode: 'unavailable', reason: expectedReason });
+    },
+  );
+
+  it('enforces pipeline and realtime execution gates even when optional requirements are omitted', () => {
+    const misconfiguredPreset: ImageEffectPreset = {
+      id: 'nightglass',
+      displayName: 'Future realtime look',
+      category: 'enhancement',
+      defaultIntensity: 50,
+      processing: {
+        pipeline: 'native-pixel-pipeline',
+        executionMode: 'realtime-camera',
+        memoryClass: 'moderate',
+        requirements: [],
+      },
+      previewTreatment: null,
+    };
+
+    expect(getImageEffectAvailability(misconfiguredPreset, previewCapabilities)).toEqual({
+      available: false,
+      mode: 'unavailable',
+      reason: 'Requires native pixel processing.',
+    });
+    expect(
+      getImageEffectAvailability(misconfiguredPreset, {
+        ...previewCapabilities,
+        nativePixelProcessing: true,
+      }),
+    ).toEqual({
+      available: false,
+      mode: 'unavailable',
+      reason: 'Requires realtime camera processing.',
     });
   });
 

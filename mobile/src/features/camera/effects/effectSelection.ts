@@ -32,6 +32,13 @@ export function imageEffectSelectionReducer(
       return state.selectedPresetId === ORIGINAL_PRESET_ID
         ? state
         : { ...state, intensity: clampImageEffectIntensity(event.intensity) };
+    case 'intensity-adjusted':
+      return state.selectedPresetId === ORIGINAL_PRESET_ID
+        ? state
+        : {
+            ...state,
+            intensity: clampImageEffectIntensity(state.intensity + event.delta),
+          };
     case 'reset':
       return { ...state, selectedPresetId: ORIGINAL_PRESET_ID, intensity: 0 };
     case 'source-changed':

@@ -3,6 +3,22 @@ import {
   createImageEffectSelectionState,
   imageEffectSelectionReducer,
 } from '../effects/effectSelection';
+import type { ImageEffectSelectionState } from '../effects/types';
+
+function adjustRepeatedly(
+  state: ImageEffectSelectionState,
+  delta: number,
+  repetitions: number,
+): ImageEffectSelectionState {
+  let nextState = state;
+  for (let index = 0; index < repetitions; index += 1) {
+    nextState = imageEffectSelectionReducer(nextState, {
+      type: 'intensity-adjusted',
+      delta,
+    });
+  }
+  return nextState;
+}
 
 describe('image effect selection', () => {
   it.each([
@@ -79,5 +95,40 @@ describe('image effect selection', () => {
         sourceUri: 'file:///second.jpg',
       }),
     ).toEqual(createImageEffectSelectionState('file:///second.jpg'));
+  });
+
+  it('applies every queued rapid adjustment against current reducer state', () => {
+    const selected = imageEffectSelectionReducer(
+      createImageEffectSelectionState('file:///original.jpg'),
+      { type: 'preset-selected', presetId: 'arawa-aura' },
+    );
+    const increased = adjustRepeatedly(selected, 10, 6);
+    const decreased = adjustRepeatedly(increased, -10, 12);
+
+    expect(increased.intensity).toBe(100);
+    expect(decreased.intensity).toBe(0);
+  });
+
+  it('orders rapid preset switches and intensity deltas deterministically', () => {
+    const events = [
+      { type: 'preset-selected', presetId: 'arawa-aura' },
+      { type: 'intensity-adjusted', delta: 10 },
+      { type: 'preset-selected', presetId: 'ember-veil' },
+      { type: 'intensity-adjusted', delta: 10 },
+    ] as const;
+    const result = events.reduce(
+      (state, event) => imageEffectSelectionReducer(state, event),
+      createImageEffectSelectionState('file:///original.jpg'),
+    );
+
+    expect(result).toMatchObject({ selectedPresetId: 'ember-veil', intensity: 62 });
+  });
+
+  it('ignores queued adjustments while Original is selected', () => {
+    const original = createImageEffectSelectionState('file:///original.jpg');
+
+    expect(
+      imageEffectSelectionReducer(original, { type: 'intensity-adjusted', delta: 10 }),
+    ).toBe(original);
   });
 });

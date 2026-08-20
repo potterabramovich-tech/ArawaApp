@@ -12,6 +12,7 @@ export function getLocalImageEffectCapabilities(): ImageEffectCapabilities {
     platform: Platform.OS,
     previewOverlay: true,
     nativePixelProcessing: false,
+    gpuProcessing: false,
     realtimeCameraProcessing: false,
     localSceneAnalysis: false,
     provenanceMetadata: false,
@@ -26,7 +27,18 @@ export function getImageEffectAvailability(
     return { available: true, mode: 'original', reason: null };
   }
 
-  const unsupportedRequirement = preset.processing.requirements.find(
+  const requiredCapabilities = new Set<ImageEffectRequirement>(preset.processing.requirements);
+  if (preset.processing.pipeline === 'preview-overlay') {
+    requiredCapabilities.add('preview-overlay');
+  }
+  if (preset.processing.pipeline === 'native-pixel-pipeline') {
+    requiredCapabilities.add('native-pixel-processing');
+  }
+  if (preset.processing.executionMode === 'realtime-camera') {
+    requiredCapabilities.add('realtime-camera-processing');
+  }
+
+  const unsupportedRequirement = Array.from(requiredCapabilities).find(
     (requirement) => !supportsRequirement(requirement, capabilities),
   );
 
@@ -62,7 +74,7 @@ export function resolvePreviewTreatment(
 ): ResolvedPreviewTreatment {
   if (
     !availability.available ||
-    availability.mode === 'original' ||
+    availability.mode !== 'preview-only' ||
     !preset.previewTreatment ||
     intensity <= 0
   ) {
@@ -84,8 +96,11 @@ function supportsRequirement(
     case 'preview-overlay':
       return capabilities.previewOverlay;
     case 'gpu-processing':
+      return capabilities.gpuProcessing;
     case 'native-pixel-processing':
       return capabilities.nativePixelProcessing;
+    case 'realtime-camera-processing':
+      return capabilities.realtimeCameraProcessing;
     case 'local-scene-analysis':
       return capabilities.localSceneAnalysis;
     case 'provenance-metadata':

@@ -8,7 +8,12 @@ export const ARACAM_SIGNATURE_PRESETS: readonly ImageEffectPreset[] = [
     displayName: 'Original',
     category: 'original',
     defaultIntensity: 0,
-    processing: { pipeline: 'none', realtime: true, memoryClass: 'minimal', requirements: [] },
+    processing: {
+      pipeline: 'none',
+      executionMode: 'none',
+      memoryClass: 'minimal',
+      requirements: [],
+    },
     previewTreatment: null,
   },
   {
@@ -18,7 +23,7 @@ export const ARACAM_SIGNATURE_PRESETS: readonly ImageEffectPreset[] = [
     defaultIntensity: 58,
     processing: {
       pipeline: 'preview-overlay',
-      realtime: true,
+      executionMode: 'interactive-preview',
       memoryClass: 'minimal',
       requirements: ['preview-overlay'],
     },
@@ -31,7 +36,7 @@ export const ARACAM_SIGNATURE_PRESETS: readonly ImageEffectPreset[] = [
     defaultIntensity: 52,
     processing: {
       pipeline: 'preview-overlay',
-      realtime: true,
+      executionMode: 'interactive-preview',
       memoryClass: 'minimal',
       requirements: ['preview-overlay'],
     },
@@ -44,7 +49,7 @@ export const ARACAM_SIGNATURE_PRESETS: readonly ImageEffectPreset[] = [
     defaultIntensity: 64,
     processing: {
       pipeline: 'preview-overlay',
-      realtime: true,
+      executionMode: 'interactive-preview',
       memoryClass: 'minimal',
       requirements: ['preview-overlay'],
     },

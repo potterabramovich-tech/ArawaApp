@@ -78,8 +78,8 @@ export function MediaPreview({
         <PresetSelector
           capabilities={capabilities}
           disabled={busy}
-          onIntensityChange={(intensity) =>
-            dispatchEffect({ type: 'intensity-changed', intensity })
+          onIntensityAdjust={(delta) =>
+            dispatchEffect({ type: 'intensity-adjusted', delta })
           }
           onPresetSelect={(presetId) => dispatchEffect({ type: 'preset-selected', presetId })}
           onReset={() => dispatchEffect({ type: 'reset' })}

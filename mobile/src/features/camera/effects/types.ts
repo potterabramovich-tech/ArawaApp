@@ -20,12 +20,14 @@ export type ImageEffectRequirement =
   | 'preview-overlay'
   | 'gpu-processing'
   | 'native-pixel-processing'
+  | 'realtime-camera-processing'
   | 'local-scene-analysis'
   | 'provenance-metadata';
+export type ImageEffectExecutionMode = 'none' | 'interactive-preview' | 'realtime-camera';
 
 export interface ImageEffectProcessingRequirements {
   pipeline: ImageEffectPipeline;
-  realtime: boolean;
+  executionMode: ImageEffectExecutionMode;
   memoryClass: ImageEffectMemoryClass;
   requirements: readonly ImageEffectRequirement[];
 }
@@ -48,6 +50,7 @@ export interface ImageEffectCapabilities {
   platform: PlatformOSType;
   previewOverlay: boolean;
   nativePixelProcessing: boolean;
+  gpuProcessing: boolean;
   realtimeCameraProcessing: boolean;
   localSceneAnalysis: boolean;
   provenanceMetadata: boolean;
@@ -68,6 +71,7 @@ export interface ImageEffectSelectionState {
 export type ImageEffectSelectionEvent =
   | { type: 'preset-selected'; presetId: ImageEffectPresetId }
   | { type: 'intensity-changed'; intensity: number }
+  | { type: 'intensity-adjusted'; delta: number }
   | { type: 'reset' }
   | { type: 'source-changed'; sourceUri: string };
 
