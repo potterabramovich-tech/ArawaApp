@@ -297,6 +297,7 @@ export function CameraScreen() {
           }
           canSave={Platform.OS !== 'web'}
           insets={insets}
+          key={previewPhoto.uri}
           onRetake={retake}
           onSave={savePhoto}
           onShare={sharePhoto}
