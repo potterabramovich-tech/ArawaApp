@@ -81,7 +81,9 @@ const renderer: SignatureStillImageRenderer = {
       paint.setColorFilter(colorFilter);
       paint.setAntiAlias(true);
       paint.setDither(true);
-      surface.getCanvas().drawImageRectOptions(
+      const canvas = surface.getCanvas();
+      canvas.clear(Skia.Color('transparent'));
+      canvas.drawImageRectOptions(
         sourceImage,
         Skia.XYWHRect(0, 0, sourceImage.width(), sourceImage.height()),
         Skia.XYWHRect(0, 0, size.width, size.height),

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useReducer } from 'react';
+import { useEffect, useMemo, useReducer, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import type { CameraPhoto } from '../../cameraSession';
 import type { ImageEffectSelectionState } from '../types';
 import { createImageProcessingRequest } from './orchestrator';
@@ -12,6 +13,9 @@ import {
   imageEffectProcessorRegistry,
   type ImageEffectProcessorRegistry,
 } from './processorRegistry';
+import type { ImageEffectRenderPlan } from './types';
+
+export const PREVIEW_RENDER_DEBOUNCE_MS = 120;
 
 export function useImageEffectProcessingSession(
   photo: Readonly<CameraPhoto>,
@@ -27,9 +31,27 @@ export function useImageEffectProcessingSession(
     () => new ImageEffectProcessingCoordinator(registry),
     [registry],
   );
+  const [appIsActive, setAppIsActive] = useState(
+    isProcessingAppStateActive(AppState.currentState),
+  );
 
   useEffect(() => {
-    dispatch({ type: 'source-changed', sourceUri: photo.uri });
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const nextIsActive = isProcessingAppStateActive(nextState);
+      if (!nextIsActive) {
+        coordinator.cancel(undefined, dispatch);
+      }
+      setAppIsActive(nextIsActive);
+    });
+    return () => subscription.remove();
+  }, [coordinator]);
+
+  useEffect(() => {
+    dispatch({ type: 'reset', sourceUri: photo.uri });
+
+    if (!appIsActive) {
+      return;
+    }
 
     const request = createImageProcessingRequest(
       {
@@ -39,10 +61,17 @@ export function useImageEffectProcessingSession(
       },
       selection,
     );
-    coordinator.start(request, dispatch);
+    const timer = setTimeout(
+      () => coordinator.start(request, dispatch),
+      getProcessingStartDelay(request.plan),
+    );
 
-    return () => coordinator.cancel(request.id);
+    return () => {
+      clearTimeout(timer);
+      coordinator.cancel(request.id);
+    };
   }, [
+    appIsActive,
     coordinator,
     photo.fileName,
     photo.mimeType,
@@ -51,4 +80,12 @@ export function useImageEffectProcessingSession(
   ]);
 
   return state;
+}
+
+export function getProcessingStartDelay(plan: Readonly<ImageEffectRenderPlan>): number {
+  return plan.operation === 'render-preset' ? PREVIEW_RENDER_DEBOUNCE_MS : 0;
+}
+
+export function isProcessingAppStateActive(state: AppStateStatus | null): boolean {
+  return state === null || state === 'active';
 }

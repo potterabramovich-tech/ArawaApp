@@ -137,4 +137,27 @@ describe('signature still-image processor safety', () => {
 
     expect(remove).not.toHaveBeenCalled();
   });
+
+  it('rejects a storage collision with Original without deleting Original', async () => {
+    const { processor, storage, remove } = harness();
+    const active = request('source-collision');
+    storage.write = jest.fn(async () => active.source.uri);
+    storage.owns = jest.fn(() => true);
+
+    await expect(processor.process(active)).rejects.toThrow('owned derivative');
+
+    expect(remove).not.toHaveBeenCalledWith(active.source.uri);
+  });
+
+  it('contains malformed image/render failures before any derivative is written', async () => {
+    const renderer: SignatureStillImageRenderer = {
+      render: jest.fn(async () => {
+        throw new Error('decode failed');
+      }),
+    };
+    const { processor, storage } = harness(renderer);
+
+    await expect(processor.process(request('malformed'))).rejects.toThrow('decode failed');
+    expect(storage.write).not.toHaveBeenCalled();
+  });
 });
