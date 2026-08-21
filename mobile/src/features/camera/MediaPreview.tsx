@@ -16,6 +16,7 @@ import {
 import { getImageEffectPreset } from './effects/presets';
 import { PresetSelector } from './effects/PresetSelector';
 import { PreviewEffectLayer } from './effects/PreviewEffectLayer';
+import { useImageEffectProcessingSession } from './effects/processing/useImageEffectProcessingSession';
 
 interface MediaPreviewProps {
   busyAction: 'saving' | 'sharing' | null;
@@ -50,6 +51,7 @@ export function MediaPreview({
     effectSelection.intensity,
     effectAvailability,
   );
+  useImageEffectProcessingSession(photo, effectSelection);
 
   return (
     <View style={styles.root}>
