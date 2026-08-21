@@ -5,7 +5,7 @@ import type {
   ImageProcessingCapabilities,
 } from './types';
 
-const unsupportedCapabilities: ImageProcessingCapabilities = {
+export const unsupportedProcessingCapabilities: ImageProcessingCapabilities = {
   stillImageProcessing: false,
   previewOverlay: false,
   nativePixelProcessing: false,
@@ -23,27 +23,22 @@ export class ImageEffectProcessorRegistry {
   }
 
   resolve(plan: Readonly<ImageEffectRenderPlan>): ImageEffectProcessor | null {
-    return this.processors.find((processor) => processor.canProcess(plan)) ?? null;
+    return (
+      this.processors.find((processor) => {
+        try {
+          return processor.canProcess(plan);
+        } catch {
+          return false;
+        }
+      }) ?? null
+    );
   }
 
-  getCapabilities(): ImageProcessingCapabilities {
-    return this.processors.reduce<ImageProcessingCapabilities>(
-      (resolved, processor) => ({
-        stillImageProcessing:
-          resolved.stillImageProcessing || processor.capabilities.stillImageProcessing,
-        previewOverlay: resolved.previewOverlay || processor.capabilities.previewOverlay,
-        nativePixelProcessing:
-          resolved.nativePixelProcessing || processor.capabilities.nativePixelProcessing,
-        gpuProcessing: resolved.gpuProcessing || processor.capabilities.gpuProcessing,
-        realtimeCameraProcessing:
-          resolved.realtimeCameraProcessing || processor.capabilities.realtimeCameraProcessing,
-        localSceneAnalysis:
-          resolved.localSceneAnalysis || processor.capabilities.localSceneAnalysis,
-        provenanceMetadata:
-          resolved.provenanceMetadata || processor.capabilities.provenanceMetadata,
-      }),
-      { ...unsupportedCapabilities },
-    );
+  getCapabilities(plan: Readonly<ImageEffectRenderPlan>): ImageProcessingCapabilities {
+    const processor = this.resolve(plan);
+    return processor
+      ? { ...processor.capabilities }
+      : { ...unsupportedProcessingCapabilities };
   }
 }
 

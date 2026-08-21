@@ -1,8 +1,13 @@
 import { createImageEffectSelectionState } from '../effects/effectSelection';
-import { createImageProcessingRequest, resolveProcessingRequest } from '../effects/processing/orchestrator';
+import {
+  createImageProcessingRequest,
+  resolveProcessingRequest,
+  validateProcessingResult,
+} from '../effects/processing/orchestrator';
 import { originalProcessor } from '../effects/processing/originalProcessor';
 import { ImageEffectProcessorRegistry } from '../effects/processing/processorRegistry';
 import { createImageEffectRenderPlan } from '../effects/processing/renderPlan';
+import { createProcessingRequestId } from '../effects/processing/requestIds';
 
 const source = {
   fileName: 'untouched.heic',
@@ -73,5 +78,37 @@ describe('Original pass-through processing', () => {
       code: 'engine-unavailable',
       recoverable: true,
     });
+  });
+});
+
+describe('processing request and result identity', () => {
+  it('creates unique IDs even when many requests share the same timestamp', () => {
+    jest.spyOn(Date, 'now').mockReturnValue(123456);
+    const ids = Array.from({ length: 1_000 }, () => createProcessingRequestId());
+
+    expect(new Set(ids).size).toBe(ids.length);
+    jest.restoreAllMocks();
+  });
+
+  it('rejects a mismatched engine and modified Original metadata', async () => {
+    const request = createImageProcessingRequest(
+      source,
+      createImageEffectSelectionState(source.uri),
+    );
+    const valid = await originalProcessor.process(request);
+
+    expect(validateProcessingResult(request, originalProcessor, valid)).toBeNull();
+    expect(
+      validateProcessingResult(request, originalProcessor, {
+        ...valid,
+        engineId: 'unexpected-engine',
+      }),
+    ).toMatchObject({ code: 'invalid-result' });
+    expect(
+      validateProcessingResult(request, originalProcessor, {
+        ...valid,
+        media: { ...valid.media, mimeType: 'image/jpeg' },
+      }),
+    ).toMatchObject({ code: 'invalid-result' });
   });
 });

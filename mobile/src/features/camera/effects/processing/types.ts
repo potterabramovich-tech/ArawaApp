@@ -46,11 +46,13 @@ export interface ImageEffectProcessor {
   canProcess(plan: Readonly<ImageEffectRenderPlan>): boolean;
   process(request: Readonly<ImageProcessingRequest>): Promise<ImageProcessingResult>;
   cancel?(requestId: ProcessingRequestId): void | Promise<void>;
+  release(result: Readonly<ImageProcessingResult>): void | Promise<void>;
 }
 
 export type ProcessingFailureCode =
   | 'cancelled'
   | 'engine-unavailable'
+  | 'invalid-result'
   | 'processing-failed';
 
 export interface ProcessingFailure {

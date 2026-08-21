@@ -31,4 +31,5 @@ export const originalProcessor: ImageEffectProcessor = {
       sourceUri: request.source.uri,
     };
   },
+  release: () => undefined,
 };

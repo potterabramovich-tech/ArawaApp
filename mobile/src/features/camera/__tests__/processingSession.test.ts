@@ -118,9 +118,7 @@ describe('processing session concurrency', () => {
     ).toBe(replaced);
   });
 
-  it.each(['retake', 'route-re-entry', 'permission-refresh'] as const)(
-    'supports an explicit lifecycle reset for %s',
-    () => {
+  it('supports an explicit lifecycle reset without coupling to camera state', () => {
       const active = request('active');
       expect(
         processingSessionReducer(start(active), {
@@ -128,8 +126,7 @@ describe('processing session concurrency', () => {
           sourceUri: active.source.uri,
         }),
       ).toEqual(createProcessingSessionState(active.source.uri));
-    },
-  );
+  });
 
   it('ignores stale start and failure events', () => {
     const active = request('active');
