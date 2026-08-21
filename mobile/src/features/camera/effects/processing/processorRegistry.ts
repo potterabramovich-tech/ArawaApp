@@ -1,4 +1,5 @@
 import { originalProcessor } from './originalProcessor';
+import { platformStillImageProcessor } from './engines/platformStillImageProcessor';
 import type {
   ImageEffectProcessor,
   ImageEffectRenderPlan,
@@ -42,4 +43,7 @@ export class ImageEffectProcessorRegistry {
   }
 }
 
-export const imageEffectProcessorRegistry = new ImageEffectProcessorRegistry();
+export const imageEffectProcessorRegistry = new ImageEffectProcessorRegistry([
+  originalProcessor,
+  ...(platformStillImageProcessor ? [platformStillImageProcessor] : []),
+]);

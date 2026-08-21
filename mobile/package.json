@@ -24,8 +24,10 @@
   },
   "dependencies": {
     "@expo/vector-icons": "15.1.1",
+    "@shopify/react-native-skia": "2.6.2",
     "expo": "~57.0.15",
     "expo-camera": "~57.0.4",
+    "expo-file-system": "~57.0.5",
     "expo-haptics": "~57.0.1",
     "expo-image-picker": "~57.0.12",
     "expo-linear-gradient": "~57.0.1",
@@ -53,6 +55,9 @@
   },
   "jest": {
     "preset": "jest-expo",
+    "moduleNameMapper": {
+      "^\\./engines/platformStillImageProcessor$": "<rootDir>/src/features/camera/effects/processing/engines/platformStillImageProcessor.ts"
+    },
     "transformIgnorePatterns": [
       "node_modules/(?!(.pnpm|(jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg))"
     ],

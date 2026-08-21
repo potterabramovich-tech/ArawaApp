@@ -37,7 +37,7 @@ export function PresetSelector({
       <View style={styles.headingRow}>
         <View>
           <Text style={styles.eyebrow}>ARACAM SIGNATURE</Text>
-          <Text style={styles.disclosure}>Preview only · original stays untouched</Text>
+          <Text style={styles.disclosure}>Local preview when supported · original stays untouched</Text>
         </View>
         {!originalSelected && (
           <Pressable
