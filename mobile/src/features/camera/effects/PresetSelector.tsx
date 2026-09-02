@@ -35,14 +35,15 @@ export function PresetSelector({
   return (
     <View accessibilityLabel="AraCam signature presets" style={styles.root}>
       <View style={styles.headingRow}>
-        <View>
+        <View style={styles.headingCopy}>
           <Text style={styles.eyebrow}>ARACAM SIGNATURE</Text>
-          <Text style={styles.disclosure}>Preview only · original stays untouched</Text>
+          <Text style={styles.disclosure}>Local preview when supported · original stays untouched</Text>
         </View>
         {!originalSelected && (
           <Pressable
             accessibilityLabel="Reset image effect to Original"
             accessibilityRole="button"
+            accessibilityState={{ disabled }}
             disabled={disabled}
             onPress={onReset}
             style={({ pressed }) => [styles.reset, pressed && styles.pressed]}
@@ -162,9 +163,11 @@ function IntensityButton({ accessibilityLabel, disabled, icon, onPress }: Intens
 const styles = StyleSheet.create({
   root: { gap: spacing.sm },
   headingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headingCopy: { flex: 1, paddingRight: spacing.sm },
   eyebrow: { color: colors.text, fontSize: 11, fontWeight: '900', letterSpacing: 1.3 },
   disclosure: { color: colors.textMuted, fontSize: 10, marginTop: 2 },
   reset: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,

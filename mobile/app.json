@@ -12,7 +12,14 @@
     "web": { "bundler": "metro", "output": "static" },
     "plugins": [
       "expo-router",
-      ["expo-camera", { "cameraPermission": "Allow Arawa to use your camera to create and share moments." }],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Arawa to use your camera to create and share moments.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
       [
         "expo-image-picker",
         {

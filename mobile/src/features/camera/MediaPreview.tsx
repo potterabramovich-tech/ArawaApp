@@ -1,4 +1,4 @@
-import { useMemo, useReducer } from 'react';
+import { useMemo, useReducer, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { EdgeInsets } from 'react-native-safe-area-context';
@@ -16,6 +16,8 @@ import {
 import { getImageEffectPreset } from './effects/presets';
 import { PresetSelector } from './effects/PresetSelector';
 import { PreviewEffectLayer } from './effects/PreviewEffectLayer';
+import { OriginalComparisonControl } from './effects/OriginalComparisonControl';
+import { createImageEffectRenderPlan } from './effects/processing/renderPlan';
 import { useImageEffectProcessingSession } from './effects/processing/useImageEffectProcessingSession';
 
 interface MediaPreviewProps {
@@ -51,12 +53,38 @@ export function MediaPreview({
     effectSelection.intensity,
     effectAvailability,
   );
-  useImageEffectProcessingSession(photo, effectSelection);
+  const processing = useImageEffectProcessingSession(photo, effectSelection);
+  const expectedPlan = createImageEffectRenderPlan(
+    effectSelection.selectedPresetId,
+    effectSelection.intensity,
+  );
+  const renderedMedia =
+    processing.status === 'ready' &&
+    processing.result.kind === 'derivative' &&
+    processing.result.sourceUri === photo.uri &&
+    processing.request.plan.presetId === expectedPlan.presetId &&
+    processing.request.plan.intensity === expectedPlan.intensity
+      ? processing.result.media
+      : null;
+  const [originalForDerivative, setOriginalForDerivative] = useState<string | null>(null);
+  const showingOriginal =
+    renderedMedia !== null && originalForDerivative === renderedMedia.uri;
+  const showingRendered = renderedMedia !== null && !showingOriginal;
 
   return (
     <View style={styles.root}>
-      <Image accessibilityLabel="Captured moment preview" source={{ uri: photo.uri }} style={styles.image} />
-      <PreviewEffectLayer treatment={previewTreatment} />
+      <Image
+        accessibilityLabel={
+          showingRendered
+            ? `${selectedPreset.displayName} locally rendered preview`
+            : !renderedMedia && previewTreatment.kind === 'overlay'
+              ? `${selectedPreset.displayName} overlay preview; original photo unchanged`
+              : 'Untouched original photo preview'
+        }
+        source={{ uri: showingRendered ? renderedMedia.uri : photo.uri }}
+        style={styles.image}
+      />
+      {!renderedMedia && <PreviewEffectLayer treatment={previewTreatment} />}
       <View style={styles.scrim} />
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Pressable
@@ -87,6 +115,26 @@ export function MediaPreview({
           onReset={() => dispatchEffect({ type: 'reset' })}
           selection={effectSelection}
         />
+        {renderedMedia && (
+          <OriginalComparisonControl
+            onToggle={() =>
+              setOriginalForDerivative((uri) =>
+                uri === renderedMedia.uri ? null : renderedMedia.uri,
+              )
+            }
+            presetName={selectedPreset.displayName}
+            showingOriginal={showingOriginal}
+          />
+        )}
+        {!renderedMedia && expectedPlan.operation === 'render-preset' && (
+          <Text accessibilityLiveRegion="polite" style={styles.processingStatus}>
+            {processing.status === 'processing' || processing.status === 'queued'
+              ? 'Rendering a local preview…'
+              : processing.status === 'failure'
+                ? 'Local rendering unavailable · overlay fallback. Tap a preset to retry.'
+                : 'Preparing local preview…'}
+          </Text>
+        )}
         <View style={styles.actions}>
           <PreviewAction
             disabled={busy}
@@ -197,6 +245,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   previewText: { color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 1.5 },
+  processingStatus: { minHeight: 18, color: colors.textMuted, fontSize: 10, fontWeight: '700' },
   bottomDock: {
     marginTop: 'auto',
     paddingHorizontal: spacing.lg,

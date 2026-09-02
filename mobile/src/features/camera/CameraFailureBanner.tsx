@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 14, fontWeight: '800' },
   message: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
   retry: {
-    minHeight: 40,
+    minHeight: 48,
     paddingHorizontal: spacing.sm,
     borderRadius: radii.sm,
     alignItems: 'center',
