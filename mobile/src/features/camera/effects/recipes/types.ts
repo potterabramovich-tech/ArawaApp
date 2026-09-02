@@ -5,6 +5,7 @@ export type SignatureRecipeId = Exclude<ImageEffectPresetId, 'original'>;
 export interface SignatureImageRecipe {
   id: SignatureRecipeId;
   version: number;
+  /** Row-major 4x5 matrix operating on unpremultiplied RGBA in 0..1 units, including offsets. */
   colorMatrix: readonly number[];
 }
 

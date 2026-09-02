@@ -3,7 +3,6 @@ import { AppState, Linking, Platform, StyleSheet, Text, View } from 'react-nativ
 import { CameraView, useCameraPermissions, type CameraType, type FlashMode } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -66,7 +65,9 @@ export function CameraScreen() {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
-        void getPermission();
+        void getPermission().catch((error) => {
+          dispatch({ type: 'permission-failed', error: mapCameraSessionError(error, 'permission') });
+        });
       }
     });
 
@@ -183,7 +184,7 @@ export function CameraScreen() {
   };
 
   const savePhoto = async () => {
-    if (operationLock.current || session.status !== 'preview-ready' || session.photo.saved) {
+    if (Platform.OS === 'web' || operationLock.current || session.status !== 'preview-ready' || session.photo.saved) {
       return;
     }
 
@@ -192,6 +193,9 @@ export function CameraScreen() {
     dispatch({ type: 'save-started' });
 
     try {
+      // The SDK's native media-library classes cannot be evaluated during web/SSR startup.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- Guarded native-only loading avoids evaluating these classes on web.
+      const MediaLibrary = require('expo-media-library') as typeof import('expo-media-library');
       const mediaPermission = await MediaLibrary.requestPermissionsAsync(true, ['photo']);
       if (!mediaPermission.granted) {
         throw { code: 'E_MEDIA_LIBRARY_PERMISSION' };

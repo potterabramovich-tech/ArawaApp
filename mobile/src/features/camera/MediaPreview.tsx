@@ -77,7 +77,9 @@ export function MediaPreview({
         accessibilityLabel={
           showingRendered
             ? `${selectedPreset.displayName} locally rendered preview`
-            : 'Untouched original photo preview'
+            : !renderedMedia && previewTreatment.kind === 'overlay'
+              ? `${selectedPreset.displayName} overlay preview; original photo unchanged`
+              : 'Untouched original photo preview'
         }
         source={{ uri: showingRendered ? renderedMedia.uri : photo.uri }}
         style={styles.image}
@@ -129,7 +131,7 @@ export function MediaPreview({
             {processing.status === 'processing' || processing.status === 'queued'
               ? 'Rendering a local preview…'
               : processing.status === 'failure'
-                ? 'Local rendering unavailable · showing preview fallback'
+                ? 'Local rendering unavailable · overlay fallback. Tap a preset to retry.'
                 : 'Preparing local preview…'}
           </Text>
         )}

@@ -5,11 +5,26 @@ import {
 } from '../effects/recipes/signatureRecipes';
 
 describe('AraCam signature image recipes', () => {
+  it.each(['arawa-aura', 'ember-veil', 'nightglass'] as const)(
+    '%s preserves midtone detail instead of clipping normalized RGB channels',
+    (presetId) => {
+      const recipe = compileSignatureImageRecipe(presetId, 100)!;
+      const input = [0.5, 0.5, 0.5, 1];
+      for (let channel = 0; channel < 3; channel += 1) {
+        const row = recipe.colorMatrix.slice(channel * 5, channel * 5 + 5);
+        const output = input.reduce((sum, value, index) => sum + value * row[index]!, row[4]!);
+        expect(output).toBeGreaterThan(0.4);
+        expect(output).toBeLessThan(0.65);
+      }
+      expect(recipe.colorMatrix.slice(15)).toEqual([0, 0, 0, 1, 0]);
+    },
+  );
+
   it('defines versioned recipes for Aura, Ember, and Nightglass', () => {
     expect(SIGNATURE_IMAGE_RECIPES.map(({ id, version }) => ({ id, version }))).toEqual([
-      { id: 'arawa-aura', version: 1 },
-      { id: 'ember-veil', version: 1 },
-      { id: 'nightglass', version: 1 },
+      { id: 'arawa-aura', version: 2 },
+      { id: 'ember-veil', version: 2 },
+      { id: 'nightglass', version: 2 },
     ]);
   });
 

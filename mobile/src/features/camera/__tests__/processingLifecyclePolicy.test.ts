@@ -4,6 +4,8 @@ import {
   PREVIEW_RENDER_DEBOUNCE_MS,
 } from '../effects/processing/useImageEffectProcessingSession';
 
+jest.mock('expo-router', () => ({ useFocusEffect: jest.fn() }));
+
 describe('local preview processing lifecycle policy', () => {
   it('debounces expensive rendered previews so rapid changes collapse to the latest request', () => {
     expect(

@@ -24,7 +24,7 @@ export interface SignatureStillImageRenderer {
 
 export interface PreviewDerivativeStorage {
   remove(uri: string): Promise<void>;
-  write(fileName: string, bytes: Uint8Array): Promise<string>;
+  write(fileName: string, bytes: Uint8Array, sourceUri: string): Promise<string>;
   owns(uri: string): boolean;
 }
 
@@ -42,14 +42,19 @@ export function createSignatureStillImageProcessor(
   renderer: SignatureStillImageRenderer,
   storage: PreviewDerivativeStorage,
 ): ImageEffectProcessor {
-  const cancelledRequests = new Set<string>();
+  const activeRequests = new Map<string, { cancelled: boolean }>();
 
   return {
     id: 'aracam-skia-still-v1',
     capabilities,
-    canProcess: (plan) => plan.operation === 'render-preset',
+    canProcess: (plan) => plan.operation === 'render-preset' &&
+      compileSignatureImageRecipe(plan.presetId, plan.intensity) !== null,
     async process(request) {
-      cancelledRequests.delete(request.id);
+      if (activeRequests.has(request.id)) {
+        throw new Error('This processing request is already active.');
+      }
+      const cancellation = { cancelled: false };
+      activeRequests.set(request.id, cancellation);
       try {
         const recipe = compileSignatureImageRecipe(
           request.plan.presetId,
@@ -60,13 +65,13 @@ export function createSignatureStillImageProcessor(
         }
 
         const output = createPreviewDerivativeDescriptor(request, recipe.version);
-        const isCancelled = () => cancelledRequests.has(request.id);
+        const isCancelled = () => cancellation.cancelled;
         const rendered = await renderer.render(request, recipe, output.format, isCancelled);
         throwIfCancelled(isCancelled);
 
         let outputUri: string | null = null;
         try {
-          outputUri = await storage.write(output.fileName, rendered.bytes);
+          outputUri = await storage.write(output.fileName, rendered.bytes, request.source.uri);
           if (outputUri === request.source.uri || !storage.owns(outputUri)) {
             throw new Error('The renderer did not create an owned derivative.');
           }
@@ -91,11 +96,12 @@ export function createSignatureStillImageProcessor(
           sourceUri: request.source.uri,
         } satisfies ImageProcessingResult;
       } finally {
-        cancelledRequests.delete(request.id);
+        activeRequests.delete(request.id);
       }
     },
     cancel(requestId) {
-      cancelledRequests.add(requestId);
+      const active = activeRequests.get(requestId);
+      if (active) active.cancelled = true;
     },
     async release(result) {
       if (

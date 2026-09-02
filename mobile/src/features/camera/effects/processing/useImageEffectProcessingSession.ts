@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useReducer, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import type { CameraPhoto } from '../../cameraSession';
 import type { ImageEffectSelectionState } from '../types';
 import { createImageProcessingRequest } from './orchestrator';
@@ -31,17 +32,31 @@ export function useImageEffectProcessingSession(
     () => new ImageEffectProcessingCoordinator(registry),
     [registry],
   );
-  const [appIsActive, setAppIsActive] = useState(
+  const appIsActive = useRef(
     isProcessingAppStateActive(AppState.currentState),
   );
+  const routeIsFocused = useRef(false);
+  const [lifecycleRevision, invalidateLifecycle] = useReducer((value: number) => value + 1, 0);
+
+  useFocusEffect(useCallback(() => {
+    routeIsFocused.current = true;
+    invalidateLifecycle();
+    return () => {
+      routeIsFocused.current = false;
+      coordinator.cancel(undefined, dispatch);
+      invalidateLifecycle();
+    };
+  }, [coordinator]));
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       const nextIsActive = isProcessingAppStateActive(nextState);
+      appIsActive.current = nextIsActive;
       if (!nextIsActive) {
         coordinator.cancel(undefined, dispatch);
       }
-      setAppIsActive(nextIsActive);
+      // A generation records even transitions batched back to the same final state.
+      invalidateLifecycle();
     });
     return () => subscription.remove();
   }, [coordinator]);
@@ -49,7 +64,7 @@ export function useImageEffectProcessingSession(
   useEffect(() => {
     dispatch({ type: 'reset', sourceUri: photo.uri });
 
-    if (!appIsActive) {
+    if (!appIsActive.current || !routeIsFocused.current) {
       return;
     }
 
@@ -62,7 +77,9 @@ export function useImageEffectProcessingSession(
       selection,
     );
     const timer = setTimeout(
-      () => coordinator.start(request, dispatch),
+      () => {
+        if (appIsActive.current && routeIsFocused.current) coordinator.start(request, dispatch);
+      },
       getProcessingStartDelay(request.plan),
     );
 
@@ -71,7 +88,7 @@ export function useImageEffectProcessingSession(
       coordinator.cancel(request.id);
     };
   }, [
-    appIsActive,
+    lifecycleRevision,
     coordinator,
     photo.fileName,
     photo.mimeType,

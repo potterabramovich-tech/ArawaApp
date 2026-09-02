@@ -55,6 +55,30 @@ function harness(renderer?: SignatureStillImageRenderer) {
 }
 
 describe('signature still-image processor safety', () => {
+  it('rejects a duplicate active request without resetting cancellation or starting another renderer', async () => {
+    const pending = deferred<{ bytes: Uint8Array }>();
+    const { processor, renderer, storage } = harness({ render: jest.fn(() => pending.promise) });
+    const active = request('duplicate');
+    const first = processor.process(active);
+    await expect(processor.process(active)).rejects.toThrow('already active');
+    processor.cancel?.(active.id);
+    pending.resolve({ bytes: new Uint8Array([1]) });
+    await expect(first).rejects.toThrow('cancelled');
+    expect(renderer.render).toHaveBeenCalledTimes(1);
+    expect(storage.write).not.toHaveBeenCalled();
+  });
+
+  it('does not advertise support for Original, zero intensity, or unknown recipes', () => {
+    const { processor } = harness();
+    expect(processor.canProcess({ operation: 'identity', presetId: 'original', intensity: 0 })).toBe(false);
+    expect(processor.canProcess({ operation: 'render-preset', presetId: 'arawa-aura', intensity: 0 })).toBe(false);
+    expect(processor.canProcess({ operation: 'render-preset', presetId: 'original', intensity: 90 })).toBe(false);
+    expect(processor.capabilities).toMatchObject({
+      nativePixelProcessing: true, gpuProcessing: true, previewOverlay: false,
+      realtimeCameraProcessing: false, localSceneAnalysis: false, provenanceMetadata: false,
+    });
+  });
+
   it('creates an owned screen-preview derivative and leaves Original metadata unchanged', async () => {
     const active = request();
     const sourceBefore = structuredClone(active.source);
@@ -71,7 +95,7 @@ describe('signature still-image processor safety', () => {
     expect(active.source).toEqual(sourceBefore);
     expect(renderer.render).toHaveBeenCalledWith(
       active,
-      expect.objectContaining({ id: 'nightglass', intensity: 64, version: 1 }),
+      expect.objectContaining({ id: 'nightglass', intensity: 64, version: 2 }),
       'jpeg',
       expect.any(Function),
     );
