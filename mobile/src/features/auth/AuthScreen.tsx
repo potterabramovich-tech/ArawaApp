@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { router } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
@@ -25,6 +26,7 @@ export function AuthScreen({ mode }: { mode: 'login' | 'signup' }) {
           email: form.email.trim(),
           password: form.password,
           options: {
+            emailRedirectTo: Linking.createURL('/(auth)/login'),
             data: {
               display_name: form.name.trim(),
               full_name: form.name.trim(),
@@ -132,14 +134,14 @@ export function AuthScreen({ mode }: { mode: 'login' | 'signup' }) {
         )}
 
         <GlowButton
-          label={busy ? 'Please wait…' : signup ? 'Create account' : 'Sign in'}
+          label={busy ? 'Please waitâ€¦' : signup ? 'Create account' : 'Sign in'}
           onPress={submit}
           disabled={busy}
         />
 
         <Text style={styles.legal}>
           {signup
-            ? 'By continuing, you agree to Arawa’s Terms and Privacy Policy.'
+            ? 'By continuing, you agree to Arawaâ€™s Terms and Privacy Policy.'
             : 'Secure authentication powered by Arawa account services.'}
         </Text>
       </View>
