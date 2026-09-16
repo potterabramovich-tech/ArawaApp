@@ -132,14 +132,14 @@ export function AuthScreen({ mode }: { mode: 'login' | 'signup' }) {
         )}
 
         <GlowButton
-          label={busy ? 'Please wait…' : signup ? 'Create account' : 'Sign in'}
+          label={busy ? 'Please waitâ€¦' : signup ? 'Create account' : 'Sign in'}
           onPress={submit}
           disabled={busy}
         />
 
         <Text style={styles.legal}>
           {signup
-            ? 'By continuing, you agree to Arawa’s Terms and Privacy Policy.'
+            ? 'By continuing, you agree to Arawaâ€™s Terms and Privacy Policy.'
             : 'Secure authentication powered by Arawa account services.'}
         </Text>
       </View>
